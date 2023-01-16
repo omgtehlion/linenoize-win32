@@ -14,25 +14,11 @@ const getColumns = term.getColumns;
 pub const HintsCallback = *const fn (Allocator, []const u8) Allocator.Error!?[]const u8;
 pub const CompletionsCallback = *const fn (Allocator, []const u8) Allocator.Error![]const []const u8;
 
-const key_null = 0;
-const key_ctrl_a = 1;
-const key_ctrl_b = 2;
-const key_ctrl_c = 3;
-const key_ctrl_d = 4;
-const key_ctrl_e = 5;
-const key_ctrl_f = 6;
-const key_ctrl_h = 8;
-const key_tab = 9;
-const key_ctrl_k = 11;
-const key_ctrl_l = 12;
-const key_enter = 13;
-const key_ctrl_n = 14;
-const key_ctrl_p = 16;
-const key_ctrl_t = 20;
-const key_ctrl_u = 21;
-const key_ctrl_w = 23;
-const key_esc = 27;
-const key_backspace = 127;
+fn key_ctrl(comptime c: u8) u8 {
+    return c - '`';
+}
+const char_escape = 27;
+const char_delete = 127;
 
 fn linenoiseEdit(ln: *Linenoise, in: File, out: File, prompt: []const u8) !?[]const u8 {
     var state = LinenoiseState.init(ln, in, out, prompt);
@@ -48,18 +34,18 @@ fn linenoiseEdit(ln: *Linenoise, in: File, out: File, prompt: []const u8) !?[]co
         var c = input_buf[0];
 
         // Browse completions before editing
-        if (c == key_tab) {
+        if (c == '\t') {
             if (try state.browseCompletions()) |new_c| {
                 c = new_c;
             }
         }
 
         switch (c) {
-            key_null, key_tab => {},
-            key_ctrl_a => try state.editMoveHome(),
-            key_ctrl_b => try state.editMoveLeft(),
-            key_ctrl_c => return error.CtrlC,
-            key_ctrl_d => {
+            '\x00', '\t' => {},
+            key_ctrl('a') => try state.editMoveHome(),
+            key_ctrl('b') => try state.editMoveLeft(),
+            key_ctrl('c') => return error.CtrlC,
+            key_ctrl('d') => {
                 if (state.buf.items.len > 0) {
                     try state.editDelete();
                 } else {
@@ -67,23 +53,24 @@ fn linenoiseEdit(ln: *Linenoise, in: File, out: File, prompt: []const u8) !?[]co
                     return null;
                 }
             },
-            key_ctrl_e => try state.editMoveEnd(),
-            key_ctrl_f => try state.editMoveRight(),
-            key_ctrl_k => try state.editKillLineForward(),
-            key_ctrl_l => {
+            key_ctrl('e') => try state.editMoveEnd(),
+            key_ctrl('f') => try state.editMoveRight(),
+            key_ctrl('k') => try state.editKillLineForward(),
+            key_ctrl('l') => {
                 try term.clearScreen();
                 try state.refreshLine();
             },
-            key_enter => {
+            '\r', '\n' => {
                 state.ln.history.pop();
                 return try ln.allocator.dupe(u8, state.buf.items);
             },
-            key_ctrl_n => try state.editHistoryNext(.next),
-            key_ctrl_p => try state.editHistoryNext(.prev),
-            key_ctrl_t => try state.editSwapPrev(),
-            key_ctrl_u => try state.editKillLineBackward(),
-            key_ctrl_w => try state.editDeletePrevWord(),
-            key_esc => {
+            key_ctrl('n') => try state.editHistoryNext(.next),
+            key_ctrl('p') => try state.editHistoryNext(.prev),
+            key_ctrl('t') => try state.editSwapPrev(),
+            key_ctrl('u') => try state.editKillLineBackward(),
+            key_ctrl('w') => try state.editDeletePrevWord(),
+            char_delete, key_ctrl('h') => try state.editBackspace(),
+            char_escape => {
                 if ((try term.read(in, &input_buf)) < 1) return null;
                 switch (input_buf[0]) {
                     'b' => try state.editMoveWordStart(),
@@ -124,7 +111,6 @@ fn linenoiseEdit(ln: *Linenoise, in: File, out: File, prompt: []const u8) !?[]co
                     else => {},
                 }
             },
-            key_backspace, key_ctrl_h => try state.editBackspace(),
             else => {
                 var utf8_buf: [4]u8 = undefined;
                 const utf8_len = std.unicode.utf8ByteSequenceLength(c) catch continue;
