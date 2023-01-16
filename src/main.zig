@@ -154,6 +154,8 @@ pub const Linenoise = struct {
     term_supported: bool = false,
     hints_callback: ?HintsCallback = null,
     completions_callback: ?CompletionsCallback = null,
+    stdin_file: File,
+    stdout_file: File,
 
     const Self = @This();
 
@@ -162,6 +164,8 @@ pub const Linenoise = struct {
         var self = Self{
             .allocator = allocator,
             .history = History.empty(allocator),
+            .stdin_file = std.io.getStdIn(),
+            .stdout_file = std.io.getStdOut(),
         };
         self.examineStdIo(allocator);
         return self;
@@ -176,24 +180,20 @@ pub const Linenoise = struct {
     /// check if line editing and prompt printing should be
     /// enabled or not.
     pub fn examineStdIo(self: *Self, allocator: Allocator) void {
-        const stdin_file = std.io.getStdIn();
-        self.is_tty = stdin_file.isTty();
+        self.is_tty = self.stdin_file.isTty();
         self.term_supported = !isUnsupportedTerm(allocator);
     }
 
     /// Reads a line from the terminal. Caller owns returned memory
     pub fn linenoise(self: *Self, prompt: []const u8) !?[]const u8 {
-        const stdin_file = std.io.getStdIn();
-        const stdout_file = std.io.getStdOut();
-
         if (self.is_tty and !self.term_supported) {
-            try stdout_file.writeAll(prompt);
+            try self.stdout_file.writeAll(prompt);
         }
 
         return if (self.is_tty and self.term_supported)
-            try linenoiseRaw(self, stdin_file, stdout_file, prompt)
+            try linenoiseRaw(self, self.stdin_file, self.stdout_file, prompt)
         else
-            try linenoiseNoTTY(self.allocator, stdin_file);
+            try linenoiseNoTTY(self.allocator, self.stdin_file);
     }
 };
 
