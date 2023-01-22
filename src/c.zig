@@ -57,7 +57,7 @@ export fn linenoiseAddCompletion(lc: *LinenoiseCompletions, str: [*:0]const u8) 
     }
 
     completions.append(dupe) catch return;
-    lc.cvec = (completions.toOwnedSlice() catch return).ptr;
+    lc.cvec = (completions.toOwnedSlice()).ptr;
     lc.len += 1;
 }
 
