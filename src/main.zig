@@ -127,7 +127,10 @@ fn linenoiseEdit(ln: *Linenoise, in: File, out: File, prompt: []const u8) !?[]co
 /// Read a line with custom line editing mechanics. This includes hints,
 /// completions and history
 fn linenoiseRaw(ln: *Linenoise, in: File, out: File, prompt: []const u8) !?[]const u8 {
-    defer out.writeAll("\n") catch {};
+    defer {
+        if (ln.print_newline)
+            out.writeAll("\n") catch {};
+    }
 
     const orig = try enableRawMode(in, out);
     defer disableRawMode(in, out, orig);
@@ -156,6 +159,7 @@ pub const Linenoise = struct {
     completions_callback: ?CompletionsCallback = null,
     stdin_file: File,
     stdout_file: File,
+    print_newline: bool = true,
 
     const Self = @This();
 
@@ -167,7 +171,18 @@ pub const Linenoise = struct {
             .stdin_file = std.io.getStdIn(),
             .stdout_file = std.io.getStdOut(),
         };
-        self.examineStdIo(allocator);
+        self.examineStdIo();
+        return self;
+    }
+
+    pub fn initWithHandles(allocator: Allocator, input: std.fs.File.Handle, output: std.fs.File.Handle) Self {
+        var self = Self{
+            .allocator = allocator,
+            .history = History.empty(allocator),
+            .stdin_file = .{ .handle = input, .capable_io_mode = .blocking, .intended_io_mode = .blocking },
+            .stdout_file = .{ .handle = output, .capable_io_mode = .blocking, .intended_io_mode = .blocking },
+        };
+        self.examineStdIo();
         return self;
     }
 
@@ -179,9 +194,9 @@ pub const Linenoise = struct {
     /// Re-examine (currently) stdin and environment variables to
     /// check if line editing and prompt printing should be
     /// enabled or not.
-    pub fn examineStdIo(self: *Self, allocator: Allocator) void {
+    pub fn examineStdIo(self: *Self) void {
         self.is_tty = self.stdin_file.isTty();
-        self.term_supported = !isUnsupportedTerm(allocator);
+        self.term_supported = !isUnsupportedTerm(self.allocator);
     }
 
     /// Reads a line from the terminal. Caller owns returned memory
